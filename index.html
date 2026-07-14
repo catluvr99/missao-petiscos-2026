@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Auditoria Tudão — Ponto Extra (Modo Inteligente)</title>
+<title>Auditoria Tudão —  Ponto Extra</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.19.0/dist/tf.min.js"></script>
 
@@ -27,15 +27,11 @@ select, input{width:100%;padding:11px;border:1.5px solid var(--bd);border-radius
 /* --- ESTILOS DA CÂMERA AO VIVO --- */
 .camera-container { width: 100%; border-radius: 8px; overflow: hidden; background: #000; margin-top: 10px; position: relative; }
 #video-camera { width: 100%; display: block; }
-.btn-capturar { background: #b3261e; color: white; border-radius: 50px; margin-top: 10px; padding: 15px; font-size: 16px; font-weight: bold;}
-.btn-capturar:disabled { background: #721c24; opacity: 0.7; cursor: not-allowed; }
-#status-info { font-size: 13px; color: #b3261e; margin-top: 10px; font-weight: bold; text-align: center; }
+#img-preview { width: 100%; display: none; border-radius: 8px; margin-top: 10px; }
+.btn-capturar { background: #b3261e; color: white; border-radius: 50px; margin-top: 10px; padding: 15px; font-size: 16px; }
+#status-info { font-size: 12px; color: #b3261e; margin-top: 5px; font-weight: bold; }
 
 #ia-loading { background: #fff3cd; color: #856404; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; font-weight: bold; text-align: center; }
-
-#resultado-analise { margin-top:15px; font-size: 13px; background: var(--gl); padding: 10px; border-radius: 6px; color: var(--g); border: 1px solid var(--gm); }
-.res-item { display: flex; justify-content: space-between; border-bottom: 1px solid #c3e6cb; padding: 5px 0; }
-.res-item:last-child { border-bottom: none; }
 </style>
 </head>
 <body>
@@ -64,11 +60,17 @@ select, input{width:100%;padding:11px;border:1.5px solid var(--bd);border-radius
   </div>
 
   <div id="step2" class="card oculto">
-    <div class="card-step">Passo 2 de 2</div><h2>Captura In-loco (Modo Inteligente)</h2>
+    <div class="card-step">Passo 2 de 2</div><h2>Captura In-loco</h2>
+    
+    <label class="lbl">Tem Ponto Extra "Tudão" na loja?</label>
+    <select id="sel-tudao" onchange="tratarSelecaoTudao()">
+      <option value="">— Selecione —</option>
+      <option value="Sim">Sim</option>
+      <option value="Não">Não</option>
+    </select>
 
-    <div id="area-foto">
-      <label class="lbl" style="margin-bottom: -5px;">Evidências (3 Fotos necessárias)</label>
-      <p style="font-size: 12px; color: #5F5E5A; margin-bottom: 10px;">A IA irá analisar as entranhas do seu modelo para adaptar o formato da imagem automaticamente.</p>
+    <div id="area-foto" class="oculto">
+      <label class="lbl">Câmera ao vivo</label>
       
       <div class="camera-container" id="camera-box">
         <video id="video-camera" autoplay playsinline></video>
@@ -76,22 +78,9 @@ select, input{width:100%;padding:11px;border:1.5px solid var(--bd);border-radius
       
       <button class="btn btn-capturar" id="btn-tirar-foto" onclick="capturarFoto()">📷 Capturar Foto (1/3) - FRENTE</button>
       
-      <!-- Galeria das 3 fotos capturadas -->
-      <div id="galeria-fotos" style="display: flex; gap: 8px; margin-top: 15px; overflow-x: auto; justify-content: center;"></div>
-      
       <p id="status-info">Aguardando permissão de câmera e GPS...</p>
-
-      <!-- Div para mostrar o que a IA achou no final -->
-      <div id="resultado-analise" class="oculto">
-          <strong>Resultados da Auditoria (IA):</strong>
-          <div class="res-item"><span>Frente (Tudão):</span> <span id="res-frente">Não</span></div>
-          <div class="res-item"><span>Lateral Cão:</span> <span id="res-cao">Não</span></div>
-          <div class="res-item"><span>Lateral Gato:</span> <span id="res-gato">Não</span></div>
-          <div class="res-item"><span>Dreamies:</span> <span id="res-dreamies">Não</span></div>
-          <div class="res-item"><span>Biscrok:</span> <span id="res-biscrok">Não</span></div>
-      </div>
       
-      <button class="btn btn-p oculto" id="btn-refazer" style="background:#5F5E5A; margin-top: 15px;" onclick="refazerFotos()">🔄 Refazer todas as fotos</button>
+      <button class="btn btn-p oculto" id="btn-refazer" style="background:#5F5E5A;" onclick="refazerFoto()">🔄 Refazer todas as fotos</button>
     </div>
 
     <button class="btn btn-p" id="btn-enviar" onclick="enviarDados()" disabled style="margin-top:20px;">Enviar Auditoria</button>
@@ -113,9 +102,8 @@ let contadorFotos = 0;
 let itensEncontrados = { tudao_frente: false, tudao_cao: false, tudao_gato: false, dreamies: false, biscrok: false };
 
 // ==========================================================
-// ⚠️ ATENÇÃO: Coloque as classes na MESMA ORDEM do seu data.yaml
+// CLASSES confirmadas!
 const CLASSES = ["biscrok", "dreamies", "outro_display", "tudao_cao", "tudao_frente", "tudao_gato"]; 
-// Cores diferentes para cada classe ficar bonita na tela
 const CORES = ["#FF9800", "#9C27B0", "#795548", "#03A9F4", "#4CAF50", "#E91E63"];
 // ==========================================================
 
@@ -142,13 +130,14 @@ window.addEventListener('DOMContentLoaded', () => {
   carregarModeloIA();
   popularSupervisores();
   
-  // Cria uma div para colocar as miniaturas das fotos
+  // Cria a galeria de miniaturas debaixo da câmera
   const galeria = document.createElement('div');
   galeria.id = 'galeria-fotos';
   galeria.style.display = 'flex';
   galeria.style.gap = '10px';
   galeria.style.marginTop = '15px';
   galeria.style.justifyContent = 'center';
+  galeria.style.flexWrap = 'wrap';
   document.getElementById('area-foto').appendChild(galeria);
 });
 
@@ -195,7 +184,13 @@ function habilitarContinuar() {
 function irParaPasso2() {
   document.getElementById('step1').classList.add('oculto');
   document.getElementById('step2').classList.remove('oculto');
+  
+  // AQUI ESTÁ A CORREÇÃO MÁGICA: Força a câmera e a tela a abrirem de primeira
+  document.getElementById('sel-tudao').value = "Sim";
+  document.getElementById('area-foto').classList.remove('oculto');
+  
   obterLocalizacao();
+  iniciarCamera();
 }
 
 function tratarSelecaoTudao() {
@@ -238,7 +233,7 @@ async function iniciarCamera() {
     streamCamera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
     document.getElementById('video-camera').srcObject = streamCamera;
   } catch (err) {
-    alert("Erro ao acessar a câmera. Dê permissão.");
+    alert("Erro ao acessar a câmera. Dê permissão nas configurações do seu navegador.");
   }
 }
 
@@ -266,12 +261,12 @@ function aplicarLetterbox(canvasOrigem, tamanho = 640) {
 }
 
 // ==========================================
-// CAPTURA, MARCA D'ÁGUA, IA E MULTI-FOTOS
+// CAPTURA DA FOTO, IA, MÚLTIPLAS CAIXAS E 3 FOTOS
 // ==========================================
 async function capturarFoto() {
   const btnTirarFoto = document.getElementById('btn-tirar-foto');
   btnTirarFoto.disabled = true;
-  document.getElementById('status-info').innerText = "🤖 Processando a imagem, aguarde...";
+  document.getElementById('status-info').innerText = "🤖 Processando a imagem, aguarde um segundo...";
   document.getElementById('status-info').style.color = "#1E1D1A";
 
   const video = document.getElementById('video-camera');
@@ -280,11 +275,11 @@ async function capturarFoto() {
   canvas.height = video.videoHeight;
   const ctx = canvas.getContext('2d');
   
-  // 1. Desenha a foto capturada
+  // 1. Desenha a imagem base
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   timestampAtual = new Date().toLocaleString("pt-BR");
   
-  // 2. Aplica a marca d'água de GPS
+  // 2. Cria a marca d'água no rodapé
   ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; 
   ctx.fillRect(0, canvas.height - 90, canvas.width, 90);
   ctx.fillStyle = "#ffffff";
@@ -297,9 +292,8 @@ async function capturarFoto() {
   canvasPreview.width = canvas.width;
   canvasPreview.height = canvas.height;
   const ctxPrev = canvasPreview.getContext('2d');
-  ctxPrev.drawImage(canvas, 0, 0); // Copia a imagem base
+  ctxPrev.drawImage(canvas, 0, 0); 
 
-  // 3. Processamento na IA
   setTimeout(() => {
     if (modelYOLO) {
       const { canvas: canvasLB, escala, padX, padY } = aplicarLetterbox(canvas, 640);
@@ -322,7 +316,7 @@ async function capturarFoto() {
         const dados = saida.dataSync();
         let caixasDetectadas = [];
 
-        // Varre todas as detecções do YOLO
+        // Verifica todas as detecções da IA
         for (let i = 0; i < numCaixas; i++) {
           let maxScore = 0;
           let maxClassId = -1;
@@ -332,7 +326,8 @@ async function capturarFoto() {
             if (score > maxScore) { maxScore = score; maxClassId = c; }
           }
 
-          if (maxScore > 0.40) { // Limite mínimo de 40% de confiança
+          // Se a IA tiver pelo menos 40% de certeza do produto
+          if (maxScore > 0.40) { 
             let cx, cy, bw, bh;
             if (!transposto) {
               cx = dados[0 * numCaixas + i]; cy = dados[1 * numCaixas + i];
@@ -345,7 +340,7 @@ async function capturarFoto() {
           }
         }
 
-        // Filtra caixas duplicadas para não poluir a tela
+        // Filtra os quadrados pra IA não desenhar 10 caixas no mesmo pacote
         caixasDetectadas.sort((a, b) => b.score - a.score);
         let caixasFinais = [];
         for (let caixa of caixasDetectadas) {
@@ -357,14 +352,12 @@ async function capturarFoto() {
           if (!duplicada) caixasFinais.push(caixa);
         }
 
-        // 4. Desenha os quadrados na tela e marca como encontrado
-        let itensNaFoto = [];
+        // 3. Desenha os retângulos de todos os produtos encontrados!
         for (let box of caixasFinais) {
           const nomeClasse = CLASSES[box.classId];
           const corClasse = CORES[box.classId % CORES.length];
           
           if (itensEncontrados[nomeClasse] !== undefined) itensEncontrados[nomeClasse] = true;
-          if (!itensNaFoto.includes(nomeClasse)) itensNaFoto.push(nomeClasse);
 
           const origX = (box.cx - padX) / escala;
           const origY = (box.cy - padY) / escala;
@@ -376,19 +369,22 @@ async function capturarFoto() {
           ctxPrev.lineWidth = Math.max(3, canvas.width * 0.006);
           ctxPrev.strokeRect(xmin, ymin, origW, origH);
 
-          const label = `${nomeClasse.toUpperCase().replace('_', ' ')}: ${Math.round(box.score * 100)}%`;
+          // Limpa o nome para ficar bonito na tela ("tudao_frente" vira "TUDAO FRENTE")
+          const labelTexto = nomeClasse.toUpperCase().replace('_', ' ');
+          const labelFinal = `${labelTexto}: ${Math.round(box.score * 100)}%`;
+          
           ctxPrev.font = `bold ${Math.max(16, canvas.width * 0.03)}px sans-serif`;
-          const larguraTexto = ctxPrev.measureText(label).width;
+          const larguraTexto = ctxPrev.measureText(labelFinal).width;
           
           ctxPrev.fillStyle = corClasse;
           ctxPrev.fillRect(xmin - 2, Math.max(0, ymin - 32), larguraTexto + 10, 32);
           ctxPrev.fillStyle = "#fff";
-          ctxPrev.fillText(label, xmin + 3, Math.max(22, ymin - 8));
+          ctxPrev.fillText(labelFinal, xmin + 3, Math.max(22, ymin - 8));
         }
       });
     }
 
-    // 5. Salva a foto na memória e atualiza a Galeria
+    // 4. Salva a foto que acabou de ser tirada e joga na galeria
     const fotoFinalB64 = canvasPreview.toDataURL('image/jpeg', 0.85);
     arrayFotosBase64.push(fotoFinalB64);
     contadorFotos++;
@@ -402,23 +398,23 @@ async function capturarFoto() {
     thumb.style.border = "3px solid #1D6F42";
     document.getElementById('galeria-fotos').appendChild(thumb);
 
-    // 6. Configura o botão para a próxima foto ou encerra
+    // 5. Controla o texto do botão de acordo com a foto
     if (contadorFotos === 1) {
       btnTirarFoto.innerText = "📷 Capturar Foto (2/3) - LATERAL CÃO";
-      document.getElementById('status-info').innerText = "✅ Foto 1 salva! Aponte para a LATERAL DO CÃO.";
+      document.getElementById('status-info').innerText = "✅ 1ª Foto salva! Agora mire na LATERAL DO CÃO.";
     } else if (contadorFotos === 2) {
       btnTirarFoto.innerText = "📷 Capturar Foto (3/3) - LATERAL GATO";
-      document.getElementById('status-info').innerText = "✅ Foto 2 salva! Aponte para a LATERAL DO GATO.";
+      document.getElementById('status-info').innerText = "✅ 2ª Foto salva! Agora mire na LATERAL DO GATO.";
     } else {
+      // Quando tirar a terceira, esconde a câmera e libera o envio
       btnTirarFoto.classList.add('oculto');
-      document.getElementById('camera-box').style.display = 'none'; // Esconde a câmera no final
+      document.getElementById('camera-box').style.display = 'none'; 
       pararCamera();
       
       document.getElementById('btn-refazer').classList.remove('oculto');
       document.getElementById('btn-enviar').disabled = false;
-      document.getElementById('status-info').innerText = "🎉 3 Fotos capturadas! Confira os produtos e envie.";
+      document.getElementById('status-info').innerText = "🎉 Todas as 3 fotos foram capturadas! Pode enviar a auditoria.";
       document.getElementById('status-info').style.color = "#155724";
-      document.getElementById('sel-tudao').value = "Sim"; // Força marcação positiva
     }
     
     btnTirarFoto.disabled = false;
@@ -431,7 +427,7 @@ function refazerFoto() {
   contadorFotos = 0;
   itensEncontrados = { tudao_frente: false, tudao_cao: false, tudao_gato: false, dreamies: false, biscrok: false };
   
-  document.getElementById('galeria-fotos').innerHTML = ''; // Limpa a galeria
+  document.getElementById('galeria-fotos').innerHTML = ''; 
   document.getElementById('btn-refazer').classList.add('oculto');
   document.getElementById('camera-box').style.display = 'block';
   
@@ -442,6 +438,7 @@ function refazerFoto() {
   document.getElementById('btn-enviar').disabled = true;
   document.getElementById('status-info').innerText = "Aguardando nova captura de Frente...";
   document.getElementById('status-info').style.color = "#b3261e";
+  
   iniciarCamera();
 }
 
@@ -464,7 +461,7 @@ function enviarDados() {
     lng: lngFinal,
     endereco: endFinal,
     timestamp: timestampAtual, 
-    image: arrayFotosBase64[0], // Envia a primeira foto pro Google Planilhas (para não quebrar seu script atual)
+    image: arrayFotosBase64[0], 
     image2: arrayFotosBase64[1] || "", 
     image3: arrayFotosBase64[2] || ""
   };
