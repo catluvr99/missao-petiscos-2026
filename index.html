@@ -106,29 +106,18 @@ let modelYOLO = null;
 let streamCamera = null;
 let latFinal = "", lngFinal = "", endFinal = "";
 let timestampAtual = "";
-let fotoBase64 = ""; 
-let arrayFotosCanvas = [];
 
-// NOVAS CLASSES
-const CLASSES = ["biscrok", "dreamies", "outro_display", "tudao_cao", "tudao_frente", "tudao_gato"];
-const NUM_CLASSES = CLASSES.length;
+// Variáveis para o fluxo de 3 fotos
+let arrayFotosBase64 = [];
+let contadorFotos = 0;
+let itensEncontrados = { tudao_frente: false, tudao_cao: false, tudao_gato: false, dreamies: false, biscrok: false };
 
-let itensEncontrados = {
-    tudao_frente: false,
-    tudao_cao: false,
-    tudao_gato: false,
-    dreamies: false,
-    biscrok: false
-};
-
-const CORES = {
-    "tudao_frente": "#00c853",
-    "tudao_cao": "#2962ff",
-    "tudao_gato": "#ff6d00",
-    "dreamies": "#d50000",
-    "biscrok": "#ffd600",
-    "outro_display": "#9e9e9e"
-};
+// ==========================================================
+// ⚠️ ATENÇÃO: Coloque as classes na MESMA ORDEM do seu data.yaml
+const CLASSES = ["biscrok", "dreamies", "outro_display", "tudao_cao", "tudao_frente", "tudao_gato"]; 
+// Cores diferentes para cada classe ficar bonita na tela
+const CORES = ["#FF9800", "#9C27B0", "#795548", "#03A9F4", "#4CAF50", "#E91E63"];
+// ==========================================================
 
 async function carregarModeloIA() {
   try {
@@ -138,30 +127,29 @@ async function carregarModeloIA() {
     
     modelYOLO = await tf.loadGraphModel(urlAbsolutaModelo);
     
-    document.getElementById('ia-loading').innerText = "🔥 Aquecendo motores da IA... (Aguarde)";
-
-    try {
-        tf.tidy(() => {
-            const dummy = tf.zeros([1, 640, 640, 3]);
-            // O warmup pode falhar se o modelo exigir formato NCHW, mas nós ignoramos esse erro temporário aqui
-            modelYOLO.predict(dummy);
-        });
-    } catch(e) { console.warn("Warmup error esperado dependendo da arquitetura", e); }
-    
     document.getElementById('ia-loading').style.backgroundColor = "#d4edda";
     document.getElementById('ia-loading').style.color = "#155724";
-    document.getElementById('ia-loading').innerText = "✅ Inteligência Artificial Ativa (6 Classes)!";
+    document.getElementById('ia-loading').innerText = "✅ Inteligência Artificial Ativa e Pronta!";
   } catch (error) {
     console.error("Erro ao carregar o modelo:", error);
     document.getElementById('ia-loading').style.backgroundColor = "#f8d7da";
     document.getElementById('ia-loading').style.color = "#721c24";
-    document.getElementById('ia-loading').innerText = "⚠️ Erro na IA. A auditoria continua ativa sem análise automática.";
+    document.getElementById('ia-loading').innerText = "⚠️ Erro ao carregar IA. Operando no modo manual.";
   }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   carregarModeloIA();
   popularSupervisores();
+  
+  // Cria uma div para colocar as miniaturas das fotos
+  const galeria = document.createElement('div');
+  galeria.id = 'galeria-fotos';
+  galeria.style.display = 'flex';
+  galeria.style.gap = '10px';
+  galeria.style.marginTop = '15px';
+  galeria.style.justifyContent = 'center';
+  document.getElementById('area-foto').appendChild(galeria);
 });
 
 function popularSupervisores() {
@@ -208,7 +196,18 @@ function irParaPasso2() {
   document.getElementById('step1').classList.add('oculto');
   document.getElementById('step2').classList.remove('oculto');
   obterLocalizacao();
-  refazerFotos(); 
+}
+
+function tratarSelecaoTudao() {
+  const valor = document.getElementById('sel-tudao').value;
+  const areaFoto = document.getElementById('area-foto');
+  if (valor === "Sim" || valor === "Não") {
+    areaFoto.classList.remove('oculto');
+    if (contadorFotos < 3) iniciarCamera();
+  } else {
+    areaFoto.classList.add('oculto');
+    pararCamera();
+  }
 }
 
 function obterLocalizacao() {
@@ -222,25 +221,24 @@ function obterLocalizacao() {
         const resposta = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latFinal}&lon=${lngFinal}`);
         const dadosGeo = await resposta.json();
         endFinal = dadosGeo.display_name;
-        document.getElementById('status-info').innerText = "📍 GPS e Endereço capturados com sucesso!";
+        document.getElementById('status-info').innerText = "📍 GPS capturado! Capture a 1ª foto (FRENTE).";
         document.getElementById('status-info').style.color = "#155724";
       } catch (err) {
         endFinal = `Lat: ${latFinal}, Lng: ${lngFinal}`;
-        document.getElementById('status-info').innerText = "📍 Coordenadas capturadas (Endereço indisponível)";
+        document.getElementById('status-info').innerText = "📍 Coordenadas salvas. Capture a 1ª foto (FRENTE).";
       }
     }, () => {
-      document.getElementById('status-info').innerText = "⚠️ Ative o GPS/Localização para enviar a auditoria.";
+      document.getElementById('status-info').innerText = "⚠️ Ative o GPS para enviar a auditoria.";
     });
   }
 }
 
 async function iniciarCamera() {
   try {
-    if (streamCamera) pararCamera();
     streamCamera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
     document.getElementById('video-camera').srcObject = streamCamera;
   } catch (err) {
-    alert("Erro ao acessar a câmera. Verifique as permissões.");
+    alert("Erro ao acessar a câmera. Dê permissão.");
   }
 }
 
@@ -267,158 +265,183 @@ function aplicarLetterbox(canvasOrigem, tamanho = 640) {
   return { canvas: canvasDestino, escala, padX, padY };
 }
 
-/* ==========================================================
-   FUNÇÃO CAPTURAR FOTO (MODO CAMALEÃO - ADAPTAÇÃO AUTOMÁTICA)
-   ========================================================== */
+// ==========================================
+// CAPTURA, MARCA D'ÁGUA, IA E MULTI-FOTOS
+// ==========================================
 async function capturarFoto() {
   const btnTirarFoto = document.getElementById('btn-tirar-foto');
-  btnTirarFoto.disabled = true; 
-  
+  btnTirarFoto.disabled = true;
+  document.getElementById('status-info').innerText = "🤖 Processando a imagem, aguarde...";
+  document.getElementById('status-info').style.color = "#1E1D1A";
+
   const video = document.getElementById('video-camera');
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   const ctx = canvas.getContext('2d');
   
+  // 1. Desenha a foto capturada
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  timestampAtual = new Date().toLocaleString("pt-BR");
   
+  // 2. Aplica a marca d'água de GPS
+  ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; 
+  ctx.fillRect(0, canvas.height - 90, canvas.width, 90);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "14px sans-serif";
+  ctx.fillText(`Data/Hora: ${timestampAtual}`, 10, canvas.height - 65);
+  ctx.fillText(`Endereço: ${endFinal}`, 10, canvas.height - 40);
+  ctx.fillText(`GPS: Lat: ${latFinal} | Lng: ${lngFinal}`, 10, canvas.height - 15);
+
   const canvasPreview = document.createElement('canvas');
   canvasPreview.width = canvas.width;
   canvasPreview.height = canvas.height;
   const ctxPrev = canvasPreview.getContext('2d');
-  ctxPrev.drawImage(canvas, 0, 0); 
+  ctxPrev.drawImage(canvas, 0, 0); // Copia a imagem base
 
-  document.getElementById('status-info').innerText = "🤖 Ajustando imagem para o formato da IA...";
-  document.getElementById('status-info').style.color = "#1E1D1A";
-
+  // 3. Processamento na IA
   setTimeout(() => {
-    let maiorScoreDaFoto = 0;
-    let debugInfo = "";
-
     if (modelYOLO) {
-      try {
-        // LER A EXPECTATIVA EXATA DO SEU MODELO
-        const inputShape = modelYOLO.inputs[0].shape; // ex: [null, 640, 640, 3] ou [null, 3, 640, 640]
-        const isNCHW = (inputShape[1] === 3 || inputShape[1] === 1);
-        
-        // Descobrir a resolução real (pode não ser 640, o código ajusta sozinho)
-        let resolucaoIA = 640;
-        if (inputShape[1] > 3) resolucaoIA = inputShape[1];
-        else if (inputShape[2] > 3) resolucaoIA = inputShape[2];
+      const { canvas: canvasLB, escala, padX, padY } = aplicarLetterbox(canvas, 640);
+      
+      tf.tidy(() => {
+        let tensor = tf.browser.fromPixels(canvasLB).toFloat().div(tf.scalar(255.0)).expandDims(0);
 
-        const { canvas: canvasLB, escala, padX, padY } = aplicarLetterbox(canvas, resolucaoIA);
-        
-        const deteccoes = tf.tidy(() => {
-          // O parâmetro "3" força a extração limpa de RGB, evitando canais extras
-          let tensor = tf.browser.fromPixels(canvasLB, 3).toFloat().div(tf.scalar(255.0)).expandDims(0);
-          
-          // Se o modelo exigir NCHW (girado), nós giramos
-          if (isNCHW) {
-              tensor = tensor.transpose([0, 3, 1, 2]);
-          }
-          
-          // Se o modelo por acaso foi exportado em Preto e Branco (1 canal)
-          const expectsGrayscale = (inputShape[inputShape.length - 1] === 1 || inputShape[1] === 1);
-          if (expectsGrayscale) {
-              tensor = tensor.mean(-1, true);
-          }
+        let saida = modelYOLO.predict(tensor);
+        if (Array.isArray(saida)) saida = saida[0];
+        else if (saida && !saida.shape) saida = Object.values(saida)[0];
 
-          debugInfo = `Pedido pela IA: [${inputShape.join(', ')}] | Enviado: [${tensor.shape.join(', ')}]`;
+        const shape = saida.shape; 
+        let numAtributos, numCaixas, transposto;
+        if (shape[1] <= shape[2]) { 
+          numAtributos = shape[1]; numCaixas = shape[2]; transposto = false;
+        } else { 
+          numAtributos = shape[2]; numCaixas = shape[1]; transposto = true;
+        }
 
-          // RODA A PREVISÃO
-          let saida = modelYOLO.predict(tensor);
-          
-          if (Array.isArray(saida)) saida = saida[0];
-          else if (saida && !saida.shape) saida = Object.values(saida)[0];
+        const dados = saida.dataSync();
+        let caixasDetectadas = [];
 
-          const shape = saida.shape; 
-          const dados = saida.dataSync();
-          
-          let numAtributos = shape[1]; 
-          let numCaixas = shape[2];
-          let transposto = false;
-          
-          if (shape[1] > shape[2]) { 
-            numAtributos = shape[2]; 
-            numCaixas = shape[1]; 
-            transposto = true; 
+        // Varre todas as detecções do YOLO
+        for (let i = 0; i < numCaixas; i++) {
+          let maxScore = 0;
+          let maxClassId = -1;
+
+          for (let c = 0; c < CLASSES.length; c++) {
+            let score = !transposto ? dados[(4 + c) * numCaixas + i] : dados[i * numAtributos + 4 + c];
+            if (score > maxScore) { maxScore = score; maxClassId = c; }
           }
 
-          debugInfo += `<br>• Saída da IA: [${shape.join(', ')}]`;
-
-          let boxesEncontrados = [];
-
-          for (let i = 0; i < numCaixas; i++) {
-            let melhorScoreClass = 0;
-            let idMelhorClasse = -1;
-
-            for (let c = 0; c < NUM_CLASSES; c++) {
-              let score = !transposto 
-                ? dados[(4 + c) * numCaixas + i] 
-                : dados[i * numAtributos + 4 + c];
-                
-              if (score > melhorScoreClass) {
-                melhorScoreClass = score;
-                idMelhorClasse = c;
-              }
+          if (maxScore > 0.40) { // Limite mínimo de 40% de confiança
+            let cx, cy, bw, bh;
+            if (!transposto) {
+              cx = dados[0 * numCaixas + i]; cy = dados[1 * numCaixas + i];
+              bw = dados[2 * numCaixas + i]; bh = dados[3 * numCaixas + i];
+            } else {
+              cx = dados[i * numAtributos + 0]; cy = dados[i * numAtributos + 1];
+              bw = dados[i * numAtributos + 2]; bh = dados[i * numAtributos + 3];
             }
-
-            if (melhorScoreClass > maiorScoreDaFoto) {
-                maiorScoreDaFoto = melhorScoreClass;
-            }
-
-            if (melhorScoreClass > 0.50) {
-                let cx, cy, bw, bh;
-                if (!transposto) {
-                  cx = dados[0 * numCaixas + i]; cy = dados[1 * numCaixas + i]; 
-                  bw = dados[2 * numCaixas + i]; bh = dados[3 * numCaixas + i];
-                } else {
-                  cx = dados[i * numAtributos + 0]; cy = dados[i * numAtributos + 1]; 
-                  bw = dados[i * numAtributos + 2]; bh = dados[i * numAtributos + 3];
-                }
-                boxesEncontrados.push({ classId: idMelhorClasse, score: melhorScoreClass, cx, cy, bw, bh });
-            }
+            caixasDetectadas.push({ cx, cy, bw, bh, score: maxScore, classId: maxClassId });
           }
-          return boxesEncontrados;
-        });
+        }
 
-      } catch(err) {
-        debugInfo = "ERRO FINAL: " + err.message;
-      }
+        // Filtra caixas duplicadas para não poluir a tela
+        caixasDetectadas.sort((a, b) => b.score - a.score);
+        let caixasFinais = [];
+        for (let caixa of caixasDetectadas) {
+          let duplicada = false;
+          for (let cf of caixasFinais) {
+            let dist = Math.sqrt(Math.pow(caixa.cx - cf.cx, 2) + Math.pow(caixa.cy - cf.cy, 2));
+            if (dist < 40 && caixa.classId === cf.classId) { duplicada = true; break; }
+          }
+          if (!duplicada) caixasFinais.push(caixa);
+        }
+
+        // 4. Desenha os quadrados na tela e marca como encontrado
+        let itensNaFoto = [];
+        for (let box of caixasFinais) {
+          const nomeClasse = CLASSES[box.classId];
+          const corClasse = CORES[box.classId % CORES.length];
+          
+          if (itensEncontrados[nomeClasse] !== undefined) itensEncontrados[nomeClasse] = true;
+          if (!itensNaFoto.includes(nomeClasse)) itensNaFoto.push(nomeClasse);
+
+          const origX = (box.cx - padX) / escala;
+          const origY = (box.cy - padY) / escala;
+          const origW = box.bw / escala;
+          const origH = box.bh / escala;
+          const xmin = origX - origW / 2, ymin = origY - origH / 2;
+
+          ctxPrev.strokeStyle = corClasse;
+          ctxPrev.lineWidth = Math.max(3, canvas.width * 0.006);
+          ctxPrev.strokeRect(xmin, ymin, origW, origH);
+
+          const label = `${nomeClasse.toUpperCase().replace('_', ' ')}: ${Math.round(box.score * 100)}%`;
+          ctxPrev.font = `bold ${Math.max(16, canvas.width * 0.03)}px sans-serif`;
+          const larguraTexto = ctxPrev.measureText(label).width;
+          
+          ctxPrev.fillStyle = corClasse;
+          ctxPrev.fillRect(xmin - 2, Math.max(0, ymin - 32), larguraTexto + 10, 32);
+          ctxPrev.fillStyle = "#fff";
+          ctxPrev.fillText(label, xmin + 3, Math.max(22, ymin - 8));
+        }
+      });
     }
 
-    arrayFotosCanvas.push(canvasPreview);
-    
-    document.getElementById('status-info').innerHTML = `
-        <div style="color:#004085; background-color:#cce5ff; padding: 12px; border-radius: 6px; font-size:14px; text-align: left; line-height: 1.4; border: 1px solid #b8daff;">
-          <strong>🔍 MODO DETETIVE INTELIGENTE:</strong><br>
-          • ${debugInfo}<br>
-          • <strong>Confiança Máxima:</strong> ${Math.round(maiorScoreDaFoto * 100)}%
-        </div>
-        <br>
-        Tire outra foto para testar a detecção!
-    `;
-    
-    btnTirarFoto.disabled = false; 
+    // 5. Salva a foto na memória e atualiza a Galeria
+    const fotoFinalB64 = canvasPreview.toDataURL('image/jpeg', 0.85);
+    arrayFotosBase64.push(fotoFinalB64);
+    contadorFotos++;
 
-  }, 100); 
+    const thumb = document.createElement('img');
+    thumb.src = fotoFinalB64;
+    thumb.style.width = "90px";
+    thumb.style.height = "90px";
+    thumb.style.objectFit = "cover";
+    thumb.style.borderRadius = "8px";
+    thumb.style.border = "3px solid #1D6F42";
+    document.getElementById('galeria-fotos').appendChild(thumb);
+
+    // 6. Configura o botão para a próxima foto ou encerra
+    if (contadorFotos === 1) {
+      btnTirarFoto.innerText = "📷 Capturar Foto (2/3) - LATERAL CÃO";
+      document.getElementById('status-info').innerText = "✅ Foto 1 salva! Aponte para a LATERAL DO CÃO.";
+    } else if (contadorFotos === 2) {
+      btnTirarFoto.innerText = "📷 Capturar Foto (3/3) - LATERAL GATO";
+      document.getElementById('status-info').innerText = "✅ Foto 2 salva! Aponte para a LATERAL DO GATO.";
+    } else {
+      btnTirarFoto.classList.add('oculto');
+      document.getElementById('camera-box').style.display = 'none'; // Esconde a câmera no final
+      pararCamera();
+      
+      document.getElementById('btn-refazer').classList.remove('oculto');
+      document.getElementById('btn-enviar').disabled = false;
+      document.getElementById('status-info').innerText = "🎉 3 Fotos capturadas! Confira os produtos e envie.";
+      document.getElementById('status-info').style.color = "#155724";
+      document.getElementById('sel-tudao').value = "Sim"; // Força marcação positiva
+    }
+    
+    btnTirarFoto.disabled = false;
+
+  }, 100);
 }
 
-function refazerFotos() {
-  arrayFotosCanvas = [];
+function refazerFoto() {
+  arrayFotosBase64 = [];
+  contadorFotos = 0;
   itensEncontrados = { tudao_frente: false, tudao_cao: false, tudao_gato: false, dreamies: false, biscrok: false };
-  fotoBase64 = "";
   
-  document.getElementById('resultado-analise').classList.add('oculto');
-  document.getElementById('galeria-fotos').innerHTML = ''; 
+  document.getElementById('galeria-fotos').innerHTML = ''; // Limpa a galeria
   document.getElementById('btn-refazer').classList.add('oculto');
   document.getElementById('camera-box').style.display = 'block';
-  document.getElementById('btn-tirar-foto').classList.remove('oculto');
-  document.getElementById('btn-tirar-foto').innerText = "📷 Capturar Foto (1/3) - FRENTE";
-  document.getElementById('btn-enviar').disabled = true;
-  document.getElementById('status-info').innerText = "Aguardando captura da 1ª foto...";
-  document.getElementById('status-info').style.color = "#b3261e";
   
+  const btn = document.getElementById('btn-tirar-foto');
+  btn.classList.remove('oculto');
+  btn.innerText = "📷 Capturar Foto (1/3) - FRENTE";
+  
+  document.getElementById('btn-enviar').disabled = true;
+  document.getElementById('status-info').innerText = "Aguardando nova captura de Frente...";
+  document.getElementById('status-info').style.color = "#b3261e";
   iniciarCamera();
 }
 
@@ -436,16 +459,14 @@ function enviarDados() {
     promotor: document.getElementById('sel-prom').value,
     cnpj: cnpjLoja,
     loja: nomeLoja,
-    achouFrente: itensEncontrados.tudao_frente ? "Sim" : "Não",
-    achouCao: itensEncontrados.tudao_cao ? "Sim" : "Não",
-    achouGato: itensEncontrados.tudao_gato ? "Sim" : "Não",
-    achouDreamies: itensEncontrados.dreamies ? "Sim" : "Não",
-    achouBiscrok: itensEncontrados.biscrok ? "Sim" : "Não",
+    temTudao: document.getElementById('sel-tudao').value,
     lat: latFinal,
     lng: lngFinal,
     endereco: endFinal,
     timestamp: timestampAtual, 
-    image: fotoBase64 
+    image: arrayFotosBase64[0], // Envia a primeira foto pro Google Planilhas (para não quebrar seu script atual)
+    image2: arrayFotosBase64[1] || "", 
+    image3: arrayFotosBase64[2] || ""
   };
 
   fetch(APPS_SCRIPT_URL, {
