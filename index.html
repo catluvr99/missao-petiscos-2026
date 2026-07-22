@@ -107,6 +107,28 @@ select, input{width:100%;padding:11px;border:1.5px solid var(--bd);border-radius
       <div id="galeria-fotos"></div>
 
       <button class="btn btn-p oculto" id="btn-refazer-tudo" style="background:#5F5E5A;" onclick="refazerTudo()">🔄 Refazer as 3 fotos</button>
+
+      <div id="perguntas-extra" class="oculto">
+        <label class="lbl">Tem o petisco Filezitos no display?</label>
+        <select id="sel-filezitos" onchange="checarPerguntasExtras()">
+          <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
+        </select>
+
+        <label class="lbl">Tem o petisco Tasty Bites no display?</label>
+        <select id="sel-tasty" onchange="checarPerguntasExtras()">
+          <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
+        </select>
+
+        <label class="lbl">Tem o petisco Sheba Cremoso no display?</label>
+        <select id="sel-sheba" onchange="checarPerguntasExtras()">
+          <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
+        </select>
+
+        <label class="lbl">Tem algum sachê Pedigree Caramelo no display?</label>
+        <select id="sel-sache" onchange="checarPerguntasExtras()">
+          <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
+        </select>
+      </div>
     </div>
 
     <button class="btn btn-p" id="btn-enviar" onclick="enviarDados()" disabled style="margin-top:20px;">Enviar Auditoria</button>
@@ -146,7 +168,10 @@ const ETAPAS = [
 let passoAtual = 0;                 // índice da etapa sendo capturada (0,1,2)
 let fotoTemporaria = "";            // foto (com caixas) aguardando confirmação
 let ultimaDeteccao = null;          // caixas detectadas na última captura
-let arrayFotosBase64 = [];          // as 3 fotos confirmadas, em ordem
+let arrayFotosBase64 = [];          // as 3 fotos confirmadas COM caixa (só para a galeria em tela)
+let fotoLimpaTemporaria = "";       // foto SEM caixa, com marca d'água de GPS/timestamp
+let fotosLimpasBase64 = [];         // as 3 fotos SEM caixa (usadas para montar a imagem final)
+let fotoFinalCombinada = "";        // 1 imagem única (3 fotos lado a lado) enviada para a planilha
 let itensEncontrados = { tudao_frente:false, tudao_cao:false, tudao_gato:false, dreamies:false, biscrok:false };
 
 async function carregarModeloIA() {
@@ -341,6 +366,9 @@ async function capturarFoto() {
   ctx.fillText(`Endereço: ${endFinal}`, 10, canvas.height - 40);
   ctx.fillText(`GPS: Lat: ${latFinal} | Lng: ${lngFinal}`, 10, canvas.height - 15);
 
+  // Versão SEM caixas de detecção — é essa que compõe a imagem final da planilha
+  fotoLimpaTemporaria = canvas.toDataURL('image/jpeg', 0.85);
+
   document.getElementById('camera-box').style.display = 'none';
   document.getElementById('btn-tirar-foto').classList.add('oculto');
 
@@ -489,9 +517,10 @@ function refazerFotoAtual() {
   iniciarCamera();
 }
 
-function confirmarFoto() {
-  // Salva a foto confirmada desta etapa
+async function confirmarFoto() {
+  // Salva a foto confirmada desta etapa (com caixa, só pra galeria; sem caixa, pra imagem final)
   arrayFotosBase64[passoAtual] = fotoTemporaria;
+  fotosLimpasBase64[passoAtual] = fotoLimpaTemporaria;
 
   // Acumula os itens encontrados em qualquer uma das fotos
   if (ultimaDeteccao) {
@@ -522,28 +551,91 @@ function confirmarFoto() {
     const temTudao = itensEncontrados.tudao_frente || itensEncontrados.tudao_cao || itensEncontrados.tudao_gato;
     document.getElementById('sel-tudao').value = temTudao ? "Sim" : "Não";
 
+    document.getElementById('status-info').innerText = "🖼️ Montando imagem final...";
+    document.getElementById('status-info').style.color = "#5F5E5A";
+
+    try {
+      fotoFinalCombinada = await montarImagemFinal(fotosLimpasBase64);
+    } catch (erro) {
+      console.error("Erro ao montar imagem final:", erro);
+      fotoFinalCombinada = fotosLimpasBase64[0] || "";
+    }
+
     const resumo = `🎉 3 fotos concluídas!\n` +
       `Tudão: ${temTudao ? "Detectado ✅" : "NÃO detectado ⚠️"}\n` +
       `Dreamies: ${itensEncontrados.dreamies ? "Sim ✅" : "Não"}\n` +
-      `Biscrok: ${itensEncontrados.biscrok ? "Sim ✅" : "Não"}`;
+      `Biscrok: ${itensEncontrados.biscrok ? "Sim ✅" : "Não"}\n` +
+      `Responda abaixo os demais itens do display:`;
     document.getElementById('status-info').innerText = resumo;
     document.getElementById('status-info').style.color = temTudao ? "#155724" : "#721c24";
 
-    document.getElementById('btn-enviar').disabled = false;
+    document.getElementById('perguntas-extra').classList.remove('oculto');
+    checarPerguntasExtras();
   }
+}
+
+// Só libera o envio quando as 4 perguntas extras forem respondidas
+function checarPerguntasExtras() {
+  const ids = ['sel-filezitos', 'sel-tasty', 'sel-sheba', 'sel-sache'];
+  const todasRespondidas = ids.every(id => document.getElementById(id).value !== "");
+  document.getElementById('btn-enviar').disabled = !todasRespondidas;
+}
+
+// Monta 1 única imagem juntando as 3 fotos LADO A LADO (sem caixas de detecção),
+// cada uma já com seu timestamp/GPS gravado.
+function carregarImagem(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function montarImagemFinal(fotosBase64) {
+  const alturaFinal = 500; // cada foto é redimensionada para essa altura
+  const espaco = 6;
+
+  const imagens = await Promise.all(fotosBase64.map(src => carregarImagem(src)));
+  const largurasEscaladas = imagens.map(img => Math.round(img.width * (alturaFinal / img.height)));
+  const larguraTotal = espaco + largurasEscaladas.reduce((soma, w) => soma + w + espaco, 0);
+
+  const canvasFinal = document.createElement('canvas');
+  canvasFinal.width = larguraTotal;
+  canvasFinal.height = alturaFinal + espaco * 2;
+  const ctx = canvasFinal.getContext('2d');
+  ctx.fillStyle = "#1E1D1A";
+  ctx.fillRect(0, 0, canvasFinal.width, canvasFinal.height);
+
+  let x = espaco;
+  imagens.forEach((img, i) => {
+    ctx.drawImage(img, x, espaco, largurasEscaladas[i], alturaFinal);
+    x += largurasEscaladas[i] + espaco;
+  });
+
+  return canvasFinal.toDataURL('image/jpeg', 0.85);
 }
 
 function refazerTudo() {
   arrayFotosBase64 = [];
+  fotosLimpasBase64 = [];
+  fotoFinalCombinada = "";
   itensEncontrados = { tudao_frente:false, tudao_cao:false, tudao_gato:false, dreamies:false, biscrok:false };
   document.getElementById('galeria-fotos').innerHTML = '';
   document.getElementById('btn-refazer-tudo').classList.add('oculto');
+  document.getElementById('perguntas-extra').classList.add('oculto');
+  ['sel-filezitos','sel-tasty','sel-sheba','sel-sache'].forEach(id => document.getElementById(id).value = "");
   document.getElementById('btn-enviar').disabled = true;
   iniciarEtapa(0);
   iniciarCamera();
 }
 
 function enviarDados() {
+  if (!fotoFinalCombinada) {
+    alert("Aguarde a imagem final terminar de ser montada e tente novamente.");
+    return;
+  }
+
   const btn = document.getElementById('btn-enviar');
   btn.innerText = "Enviando... Não feche a página!";
   btn.disabled = true;
@@ -560,13 +652,15 @@ function enviarDados() {
     temTudao: document.getElementById('sel-tudao').value,
     temDreamies: itensEncontrados.dreamies ? "Sim" : "Não",
     temBiscrok: itensEncontrados.biscrok ? "Sim" : "Não",
+    temFilezitos: document.getElementById('sel-filezitos').value,
+    temTastyBites: document.getElementById('sel-tasty').value,
+    temShebaCremoso: document.getElementById('sel-sheba').value,
+    temSacheCaramelo: document.getElementById('sel-sache').value,
     lat: latFinal,
     lng: lngFinal,
     endereco: endFinal,
     timestamp: timestampAtual,
-    image: arrayFotosBase64[0] || "",   // Frente
-    image2: arrayFotosBase64[1] || "",  // Lateral Cão
-    image3: arrayFotosBase64[2] || ""   // Lateral Gato
+    image: fotoFinalCombinada   // 1 imagem única: Frente + Lateral Cão + Lateral Gato lado a lado
   };
 
   fetch(APPS_SCRIPT_URL, {
