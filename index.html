@@ -75,12 +75,63 @@ select, input{width:100%;padding:11px;border:1.5px solid var(--bd);border-radius
   <div id="step2" class="card oculto">
     <div class="card-step">Passo 2 de 2</div><h2>Captura In-loco</h2>
 
-    <label class="lbl">Tem Ponto Extra "Tudão" na loja?</label>
+    <label class="lbl" id="lbl-tipo-exposicao">Tem Ponto Extra "Tudão" na loja?</label>
     <select id="sel-tudao" onchange="tratarSelecaoTudao()">
       <option value="">— Selecione —</option>
       <option value="Sim">Sim</option>
       <option value="Não">Não</option>
     </select>
+
+    <div id="area-outra-exposicao" class="oculto">
+      <label class="lbl">Qual o display?</label>
+      <input type="text" id="input-nome-display" placeholder="Ex: Ilha Whiskas, Ponta de gôndola Pedigree..." oninput="checarPerguntasExtrasOutra()">
+
+      <label class="lbl">Fotos da exposição</label>
+      <div class="camera-container" id="camera-box-outra">
+        <video id="video-camera-outra" autoplay playsinline></video>
+      </div>
+
+      <button class="btn btn-capturar" id="btn-tirar-foto-outra" onclick="capturarFotoOutra()">📷 Capturar Foto — FRENTE (obrigatória)</button>
+
+      <p id="status-info-outra">Aguardando...</p>
+
+      <img id="img-preview-outra" alt="Preview da Foto" style="width:100%;display:none;border-radius:8px;margin-top:10px;border:2px solid var(--g);">
+
+      <div class="linha-botoes oculto" id="linha-botoes-revisao-outra">
+        <button class="btn btn-refazer-foto" onclick="refazerFotoOutra()">🔄 Tirar novamente</button>
+        <button class="btn btn-confirmar" onclick="confirmarFotoOutra()">✅ Confirmar foto</button>
+      </div>
+
+      <div id="galeria-fotos-outra" style="display:flex;gap:8px;margin-top:14px;justify-content:center;flex-wrap:wrap;"></div>
+
+      <div id="botoes-mais-fotos-outra" class="oculto linha-botoes">
+        <button class="btn" style="background:var(--b);color:#fff;" onclick="adicionarMaisFotoOutra()">➕ Add lateral/traseira</button>
+        <button class="btn btn-p" onclick="finalizarFotosOutra()">✅ Concluir fotos</button>
+      </div>
+
+      <div id="perguntas-extra-outra" class="oculto">
+        <label class="lbl">Tem o petisco Filezitos no display?</label>
+        <select id="sel-o-filezitos" onchange="checarPerguntasExtrasOutra()">
+          <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
+        </select>
+
+        <label class="lbl">Tem o petisco Tasty Bites no display?</label>
+        <select id="sel-o-tasty" onchange="checarPerguntasExtrasOutra()">
+          <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
+        </select>
+
+        <label class="lbl">Tem o petisco Sheba Cremoso no display?</label>
+        <select id="sel-o-sheba" onchange="checarPerguntasExtrasOutra()">
+          <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
+        </select>
+
+        <label class="lbl">Tem algum sachê Pedigree Caramelo no display?</label>
+        <select id="sel-o-sache" onchange="checarPerguntasExtrasOutra()">
+          <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
+        </select>
+      </div>
+    </div>
+
 
     <div id="area-foto" class="oculto">
       <div class="progresso">
@@ -234,8 +285,53 @@ function liberarLoja() {
   lojaSelect.disabled = false;
 }
 
+let ehGrandeVarejo = false;   // true quando a loja escolhida é Atacadão/Assaí (ou está na lista de teste abaixo)
+let fluxoAtual = null;        // "tudao" ou "outra" — qual formulário está ativo no Passo 2
+
+function normalizarTexto(str) {
+  return (str || "").normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+}
+
+// ⚠️ TEMPORÁRIO: enquanto a base de lojas (ROTEIRO) não tem nenhuma loja real do
+// Atacadão/Assaí pra testar, os CNPJs aqui são tratados como se fossem dessas redes.
+// Assim que a lista real vier com lojas cujo nome/razão social contenha
+// "ATACADÃO" ou "ASSAÍ", a detecção automática abaixo já vai reconhecê-las sozinha
+// — pode apagar esta lista nesse momento.
+const CNPJS_TESTE_GRANDE_VAREJO = ["50.247.022/0004-71"]; // LOJA 13 - PUBLIC (usada só como exemplo de teste)
+
+function ehLojaGrandeVarejo(itemRoteiro) {
+  if (!itemRoteiro) return false;
+  if (CNPJS_TESTE_GRANDE_VAREJO.includes(itemRoteiro.j)) return true;
+  const texto = normalizarTexto(`${itemRoteiro.n} ${itemRoteiro.r}`);
+  return texto.includes('ATACAD') || texto.includes('ASSAI');
+}
+
+function configurarPerguntaTipoExposicao() {
+  const select = document.getElementById('sel-tudao');
+  const label = document.getElementById('lbl-tipo-exposicao');
+  select.value = "";
+  if (ehGrandeVarejo) {
+    label.innerText = 'A loja tem "Tudão" ou outra exposição de Ponto Extra?';
+    select.innerHTML = `<option value="">— Selecione —</option>
+      <option value="Tudão">Tem Tudão</option>
+      <option value="Outra Exposição">Tem outra exposição</option>`;
+  } else {
+    label.innerText = 'Tem Ponto Extra "Tudão" na loja?';
+    select.innerHTML = `<option value="">— Selecione —</option>
+      <option value="Sim">Sim</option>
+      <option value="Não">Não</option>`;
+  }
+}
+
 function habilitarContinuar() {
-  document.getElementById('btn-t1').disabled = !document.getElementById('sel-loja').value;
+  const valorLoja = document.getElementById('sel-loja').value;
+  document.getElementById('btn-t1').disabled = !valorLoja;
+  if (!valorLoja) return;
+
+  const cnpjSel = valorLoja.split("|")[0];
+  const itemRoteiro = ROTEIRO.find(item => item.j === cnpjSel);
+  ehGrandeVarejo = ehLojaGrandeVarejo(itemRoteiro);
+  configurarPerguntaTipoExposicao();
 }
 
 function irParaPasso2() {
@@ -247,12 +343,25 @@ function irParaPasso2() {
 function tratarSelecaoTudao() {
   const valor = document.getElementById('sel-tudao').value;
   const areaFoto = document.getElementById('area-foto');
-  if (valor === "Sim" || valor === "Não") {
+  const areaOutra = document.getElementById('area-outra-exposicao');
+  document.getElementById('btn-enviar').disabled = true;
+
+  if (valor === "Sim" || valor === "Não" || valor === "Tudão") {
+    fluxoAtual = "tudao";
+    areaOutra.classList.add('oculto');
     areaFoto.classList.remove('oculto');
     iniciarEtapa(0);
-    iniciarCamera();
-  } else {
+    iniciarCamera('video-camera');
+  } else if (valor === "Outra Exposição") {
+    fluxoAtual = "outra";
     areaFoto.classList.add('oculto');
+    pararCamera();
+    areaOutra.classList.remove('oculto');
+    iniciarFluxoOutraExposicao();
+  } else {
+    fluxoAtual = null;
+    areaFoto.classList.add('oculto');
+    areaOutra.classList.add('oculto');
     pararCamera();
   }
 }
@@ -281,10 +390,10 @@ function obterLocalizacao() {
   }
 }
 
-async function iniciarCamera() {
+async function iniciarCamera(videoId = 'video-camera') {
   try {
     streamCamera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-    document.getElementById('video-camera').srcObject = streamCamera;
+    document.getElementById(videoId).srcObject = streamCamera;
   } catch (err) {
     alert("Erro ao acessar a câmera. Dê permissão.");
   }
@@ -294,6 +403,165 @@ function pararCamera() {
   if (streamCamera) {
     streamCamera.getTracks().forEach(track => track.stop());
   }
+}
+
+// ==========================================================
+// FLUXO "OUTRA EXPOSIÇÃO" (Atacadão/Assaí quando não tem Tudão)
+// Detecta Biscrok/Dreamies por IA (já treinados); os outros 4 itens
+// (Filezitos, Tasty Bites, Sheba Cremoso, Sachê Caramelo) são manuais,
+// pois não há treinamento pra eles.
+// ==========================================================
+let fotoOutraTemporaria = "";       // foto atual COM caixa (se Biscrok/Dreamies detectado), aguardando confirmação
+let fotoOutraLimpaTemporaria = "";  // mesma foto SEM caixa — usada na imagem final
+let ultimaDeteccaoOutra = null;     // caixas (Biscrok/Dreamies) detectadas na última captura
+let fotosOutraBase64 = [];          // fotos confirmadas COM caixa (galeria em tela)
+let fotosOutraLimpasBase64 = [];    // fotos confirmadas SEM caixa (imagem final, máx. 3)
+let fotoFinalOutraCombinada = "";   // imagem final única (lado a lado) enviada para a planilha
+let itensEncontradosOutra = { biscrok:false, dreamies:false };
+
+function iniciarFluxoOutraExposicao() {
+  fotosOutraBase64 = [];
+  fotosOutraLimpasBase64 = [];
+  fotoFinalOutraCombinada = "";
+  fotoOutraTemporaria = "";
+  fotoOutraLimpaTemporaria = "";
+  itensEncontradosOutra = { biscrok:false, dreamies:false };
+  document.getElementById('input-nome-display').value = "";
+  document.getElementById('galeria-fotos-outra').innerHTML = '';
+  document.getElementById('perguntas-extra-outra').classList.add('oculto');
+  document.getElementById('botoes-mais-fotos-outra').classList.add('oculto');
+  document.getElementById('linha-botoes-revisao-outra').classList.add('oculto');
+  document.getElementById('img-preview-outra').style.display = 'none';
+  document.getElementById('camera-box-outra').style.display = 'block';
+  document.getElementById('btn-tirar-foto-outra').classList.remove('oculto');
+  document.getElementById('btn-tirar-foto-outra').innerText = "📷 Capturar Foto — FRENTE (obrigatória)";
+  document.getElementById('status-info-outra').innerText = "Mire na frente da exposição e capture.";
+  iniciarCamera('video-camera-outra');
+}
+
+async function capturarFotoOutra() {
+  const video = document.getElementById('video-camera-outra');
+  const canvas = desenharQuadroComMarca(video);
+
+  // Versão SEM caixas — é essa que compõe a imagem final da planilha
+  fotoOutraLimpaTemporaria = canvas.toDataURL('image/jpeg', 0.85);
+
+  document.getElementById('camera-box-outra').style.display = 'none';
+  document.getElementById('btn-tirar-foto-outra').classList.add('oculto');
+
+  const imgPreview = document.getElementById('img-preview-outra');
+  imgPreview.style.display = 'block';
+
+  if (modelYOLO) {
+    document.getElementById('status-info-outra').innerText = "🤖 Analisando imagem...";
+    document.getElementById('status-info-outra').style.color = "#1E1D1A";
+
+    const { resultado, escala, padX, padY } = executarDeteccaoIA(canvas);
+    // Aqui só nos interessam Biscrok e Dreamies — ignora possíveis acertos
+    // de classes do Tudão, que não fazem sentido numa "Outra Exposição".
+    const resultadoRelevante = resultado.filter(b => ['biscrok', 'dreamies'].includes(CLASSES[b.classId]));
+    ultimaDeteccaoOutra = resultadoRelevante;
+
+    const canvasPreview = desenharCaixasDeteccao(canvas, resultadoRelevante, escala, padX, padY);
+    fotoOutraTemporaria = canvasPreview.toDataURL('image/jpeg', 0.85);
+    imgPreview.src = fotoOutraTemporaria;
+
+    if (resultadoRelevante.length > 0) {
+      const nomes = resultadoRelevante
+        .map(b => `${NOMES_AMIGAVEIS[CLASSES[b.classId]]} (${Math.round(b.score * 100)}%)`)
+        .join(' | ');
+      document.getElementById('status-info-outra').innerText = `🎉 Identificado automaticamente: ${nomes}`;
+      document.getElementById('status-info-outra').style.color = "#155724";
+    } else {
+      document.getElementById('status-info-outra').innerText = "🔍 Nenhum Biscrok/Dreamies reconhecido nesta foto. Confira antes de confirmar.";
+      document.getElementById('status-info-outra').style.color = "#721c24";
+    }
+  } else {
+    fotoOutraTemporaria = fotoOutraLimpaTemporaria;
+    ultimaDeteccaoOutra = [];
+    imgPreview.src = fotoOutraTemporaria;
+    document.getElementById('status-info-outra').innerText = "📸 Foto guardada (IA offline). Confira manualmente.";
+  }
+
+  document.getElementById('linha-botoes-revisao-outra').classList.remove('oculto');
+  pararCamera();
+}
+
+function refazerFotoOutra() {
+  fotoOutraTemporaria = "";
+  fotoOutraLimpaTemporaria = "";
+  ultimaDeteccaoOutra = null;
+  document.getElementById('img-preview-outra').style.display = 'none';
+  document.getElementById('linha-botoes-revisao-outra').classList.add('oculto');
+  document.getElementById('camera-box-outra').style.display = 'block';
+  document.getElementById('btn-tirar-foto-outra').classList.remove('oculto');
+  iniciarCamera('video-camera-outra');
+}
+
+function confirmarFotoOutra() {
+  fotosOutraBase64.push(fotoOutraTemporaria);
+  fotosOutraLimpasBase64.push(fotoOutraLimpaTemporaria);
+
+  // Acumula os itens (Biscrok/Dreamies) encontrados em qualquer uma das fotos
+  if (ultimaDeteccaoOutra) {
+    ultimaDeteccaoOutra.forEach(box => {
+      const nomeClasse = CLASSES[box.classId];
+      if (itensEncontradosOutra[nomeClasse] !== undefined) itensEncontradosOutra[nomeClasse] = true;
+    });
+  }
+
+  const thumb = document.createElement('img');
+  thumb.src = fotoOutraTemporaria;
+  thumb.style.cssText = "width:80px;height:80px;object-fit:cover;border-radius:8px;border:2px solid var(--g);";
+  document.getElementById('galeria-fotos-outra').appendChild(thumb);
+
+  document.getElementById('img-preview-outra').style.display = 'none';
+  document.getElementById('linha-botoes-revisao-outra').classList.add('oculto');
+
+  if (fotosOutraLimpasBase64.length < 3) {
+    document.getElementById('botoes-mais-fotos-outra').classList.remove('oculto');
+  } else {
+    finalizarFotosOutra(); // já tirou o máximo de 3 fotos (frente + 2 laterais/traseira)
+  }
+}
+
+function adicionarMaisFotoOutra() {
+  document.getElementById('botoes-mais-fotos-outra').classList.add('oculto');
+  document.getElementById('camera-box-outra').style.display = 'block';
+  document.getElementById('btn-tirar-foto-outra').classList.remove('oculto');
+  document.getElementById('btn-tirar-foto-outra').innerText = "📷 Capturar Foto — Lateral/Traseira (opcional)";
+  document.getElementById('status-info-outra').innerText = "Mire na lateral/traseira da exposição e capture.";
+  iniciarCamera('video-camera-outra');
+}
+
+async function finalizarFotosOutra() {
+  document.getElementById('botoes-mais-fotos-outra').classList.add('oculto');
+  document.getElementById('camera-box-outra').style.display = 'none';
+  document.getElementById('btn-tirar-foto-outra').classList.add('oculto');
+  document.getElementById('status-info-outra').innerText = "🖼️ Montando imagem final...";
+
+  try {
+    fotoFinalOutraCombinada = await montarImagemFinal(fotosOutraLimpasBase64);
+  } catch (erro) {
+    console.error("Erro ao montar imagem final (Outra Exposição):", erro);
+    fotoFinalOutraCombinada = fotosOutraLimpasBase64[0] || "";
+  }
+
+  const resumo = `✅ ${fotosOutraLimpasBase64.length} foto(s) confirmada(s).\n` +
+    `Biscrok: ${itensEncontradosOutra.biscrok ? "Sim ✅" : "Não"}  |  Dreamies: ${itensEncontradosOutra.dreamies ? "Sim ✅" : "Não"}\n` +
+    `Preencha o nome do display e responda os demais itens abaixo:`;
+  document.getElementById('status-info-outra').innerText = resumo;
+  document.getElementById('perguntas-extra-outra').classList.remove('oculto');
+  checarPerguntasExtrasOutra();
+}
+
+// Só libera o envio quando o nome do display, ao menos 1 foto e as 4 perguntas manuais estiverem OK
+function checarPerguntasExtrasOutra() {
+  const ids = ['sel-o-filezitos', 'sel-o-tasty', 'sel-o-sheba', 'sel-o-sache'];
+  const nomeOk = document.getElementById('input-nome-display').value.trim() !== "";
+  const todasRespondidas = ids.every(id => document.getElementById(id).value !== "");
+  const temFoto = fotosOutraLimpasBase64.length > 0;
+  document.getElementById('btn-enviar').disabled = !(nomeOk && todasRespondidas && temFoto);
 }
 
 function aplicarLetterbox(canvasOrigem, tamanho = 640) {
@@ -342,22 +610,17 @@ function atualizarProgresso() {
 }
 
 // ==========================================
-// CAPTURA DA FOTO + MARCA D'ÁGUA DE GPS + DETECÇÃO IA
-// (mesma lógica da versão anterior que funcionava, agora rodando
-// para todas as classes treinadas e por etapa)
+// Desenha o quadro atual do vídeo num canvas, já com a marca d'água de
+// GPS/timestamp gravada. Usado tanto no fluxo do Tudão quanto no de Outra Exposição.
 // ==========================================
-async function capturarFoto() {
-  const video = document.getElementById('video-camera');
+function desenharQuadroComMarca(video) {
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   const ctx = canvas.getContext('2d');
-
-  // 1. Desenha a foto capturada
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   timestampAtual = new Date().toLocaleString("pt-BR");
 
-  // 2. Aplica a marca d'água de GPS diretamente na foto
   ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
   ctx.fillRect(0, canvas.height - 90, canvas.width, 90);
   ctx.fillStyle = "#ffffff";
@@ -365,6 +628,116 @@ async function capturarFoto() {
   ctx.fillText(`Data/Hora: ${timestampAtual}`, 10, canvas.height - 65);
   ctx.fillText(`Endereço: ${endFinal}`, 10, canvas.height - 40);
   ctx.fillText(`GPS: Lat: ${latFinal} | Lng: ${lngFinal}`, 10, canvas.height - 15);
+  return canvas;
+}
+
+// ==========================================
+// Roda a inferência do YOLO num canvas já capturado e devolve as caixas
+// detectadas (score, classe, posição no espaço letterbox 640x640) junto
+// com os parâmetros de escala/padding pra converter de volta pro tamanho real.
+// Reutilizada tanto no fluxo do Tudão quanto no de Outra Exposição.
+// ==========================================
+function executarDeteccaoIA(canvas) {
+  const { canvas: canvasLB, escala, padX, padY } = aplicarLetterbox(canvas, 640);
+
+  const resultado = tf.tidy(() => {
+    const tensor = tf.browser.fromPixels(canvasLB)
+                   .toFloat()
+                   .div(tf.scalar(255.0))
+                   .expandDims(0);
+
+    let saida = modelYOLO.predict(tensor);
+    if (Array.isArray(saida)) saida = saida[0];
+    else if (saida && !saida.shape) saida = Object.values(saida)[0];
+
+    const shape = saida.shape;
+    let numAtributos, numCaixas, transposto;
+    if (shape[1] <= shape[2]) {
+      numAtributos = shape[1]; numCaixas = shape[2]; transposto = false;
+    } else {
+      numAtributos = shape[2]; numCaixas = shape[1]; transposto = true;
+    }
+
+    const dados = saida.dataSync();
+    let candidatas = [];
+
+    for (let i = 0; i < numCaixas; i++) {
+      let melhorScore = 0, melhorClasse = -1;
+      for (let c = 0; c < CLASSES.length; c++) {
+        const score = !transposto
+          ? dados[(4 + c) * numCaixas + i]
+          : dados[i * numAtributos + 4 + c];
+        if (score > melhorScore) { melhorScore = score; melhorClasse = c; }
+      }
+
+      if (melhorScore > LIMIAR && CLASSES[melhorClasse] !== 'outro_display') {
+        let cx, cy, bw, bh;
+        if (!transposto) {
+          cx = dados[0 * numCaixas + i]; cy = dados[1 * numCaixas + i];
+          bw = dados[2 * numCaixas + i]; bh = dados[3 * numCaixas + i];
+        } else {
+          cx = dados[i * numAtributos + 0]; cy = dados[i * numAtributos + 1];
+          bw = dados[i * numAtributos + 2]; bh = dados[i * numAtributos + 3];
+        }
+        candidatas.push({ cx, cy, bw, bh, score: melhorScore, classId: melhorClasse });
+      }
+    }
+
+    // Remove caixas duplicadas da mesma classe muito próximas entre si
+    candidatas.sort((a, b) => b.score - a.score);
+    let finais = [];
+    for (const cand of candidatas) {
+      const duplicada = finais.some(f => f.classId === cand.classId &&
+        Math.hypot(cand.cx - f.cx, cand.cy - f.cy) < 40);
+      if (!duplicada) finais.push(cand);
+    }
+
+    return finais;
+  });
+
+  return { resultado, escala, padX, padY };
+}
+
+// Desenha as caixas do resultado da IA sobre uma cópia do canvas original
+function desenharCaixasDeteccao(canvasBase, resultado, escala, padX, padY) {
+  const canvasPreview = document.createElement('canvas');
+  canvasPreview.width = canvasBase.width;
+  canvasPreview.height = canvasBase.height;
+  const ctxPrev = canvasPreview.getContext('2d');
+  ctxPrev.drawImage(canvasBase, 0, 0);
+
+  resultado.forEach(box => {
+    const nomeClasse = CLASSES[box.classId];
+    const cor = CORES[box.classId % CORES.length];
+
+    const origX = (box.cx - padX) / escala;
+    const origY = (box.cy - padY) / escala;
+    const origW = box.bw / escala;
+    const origH = box.bh / escala;
+    const xmin = origX - origW / 2, ymin = origY - origH / 2;
+
+    ctxPrev.strokeStyle = cor;
+    ctxPrev.lineWidth = Math.max(3, canvasBase.width * 0.006);
+    ctxPrev.strokeRect(xmin, ymin, origW, origH);
+
+    const rotulo = `${(NOMES_AMIGAVEIS[nomeClasse] || nomeClasse)}: ${Math.round(box.score * 100)}%`;
+    ctxPrev.font = `bold ${Math.max(16, canvasBase.width * 0.03)}px sans-serif`;
+    const largura = ctxPrev.measureText(rotulo).width;
+    ctxPrev.fillStyle = cor;
+    ctxPrev.fillRect(xmin - 2, Math.max(0, ymin - 30), largura + 10, 30);
+    ctxPrev.fillStyle = "#fff";
+    ctxPrev.fillText(rotulo, xmin + 3, Math.max(20, ymin - 8));
+  });
+
+  return canvasPreview;
+}
+
+// ==========================================
+// CAPTURA DA FOTO + MARCA D'ÁGUA DE GPS + DETECÇÃO IA (fluxo do Tudão)
+// ==========================================
+async function capturarFoto() {
+  const video = document.getElementById('video-camera');
+  const canvas = desenharQuadroComMarca(video);
 
   // Versão SEM caixas de detecção — é essa que compõe a imagem final da planilha
   fotoLimpaTemporaria = canvas.toDataURL('image/jpeg', 0.85);
@@ -381,92 +754,8 @@ async function capturarFoto() {
     document.getElementById('status-info').innerText = "🤖 Analisando imagem...";
     document.getElementById('status-info').style.color = "#1E1D1A";
 
-    const { canvas: canvasLB, escala, padX, padY } = aplicarLetterbox(canvas, 640);
-
-    const resultado = tf.tidy(() => {
-      const tensor = tf.browser.fromPixels(canvasLB)
-                     .toFloat()
-                     .div(tf.scalar(255.0))
-                     .expandDims(0);
-
-      let saida = modelYOLO.predict(tensor);
-      if (Array.isArray(saida)) saida = saida[0];
-      else if (saida && !saida.shape) saida = Object.values(saida)[0];
-
-      const shape = saida.shape;
-      let numAtributos, numCaixas, transposto;
-      if (shape[1] <= shape[2]) {
-        numAtributos = shape[1]; numCaixas = shape[2]; transposto = false;
-      } else {
-        numAtributos = shape[2]; numCaixas = shape[1]; transposto = true;
-      }
-
-      const dados = saida.dataSync();
-      let candidatas = [];
-
-      for (let i = 0; i < numCaixas; i++) {
-        let melhorScore = 0, melhorClasse = -1;
-        for (let c = 0; c < CLASSES.length; c++) {
-          const score = !transposto
-            ? dados[(4 + c) * numCaixas + i]
-            : dados[i * numAtributos + 4 + c];
-          if (score > melhorScore) { melhorScore = score; melhorClasse = c; }
-        }
-
-        if (melhorScore > LIMIAR && CLASSES[melhorClasse] !== 'outro_display') {
-          let cx, cy, bw, bh;
-          if (!transposto) {
-            cx = dados[0 * numCaixas + i]; cy = dados[1 * numCaixas + i];
-            bw = dados[2 * numCaixas + i]; bh = dados[3 * numCaixas + i];
-          } else {
-            cx = dados[i * numAtributos + 0]; cy = dados[i * numAtributos + 1];
-            bw = dados[i * numAtributos + 2]; bh = dados[i * numAtributos + 3];
-          }
-          candidatas.push({ cx, cy, bw, bh, score: melhorScore, classId: melhorClasse });
-        }
-      }
-
-      // Remove caixas duplicadas da mesma classe muito próximas entre si
-      candidatas.sort((a, b) => b.score - a.score);
-      let finais = [];
-      for (const cand of candidatas) {
-        const duplicada = finais.some(f => f.classId === cand.classId &&
-          Math.hypot(cand.cx - f.cx, cand.cy - f.cy) < 40);
-        if (!duplicada) finais.push(cand);
-      }
-
-      return finais;
-    });
-
-    const canvasPreview = document.createElement('canvas');
-    canvasPreview.width = canvas.width;
-    canvasPreview.height = canvas.height;
-    const ctxPrev = canvasPreview.getContext('2d');
-    ctxPrev.drawImage(canvas, 0, 0);
-
-    // Desenha uma caixa para cada item detectado nesta foto
-    resultado.forEach(box => {
-      const nomeClasse = CLASSES[box.classId];
-      const cor = CORES[box.classId % CORES.length];
-
-      const origX = (box.cx - padX) / escala;
-      const origY = (box.cy - padY) / escala;
-      const origW = box.bw / escala;
-      const origH = box.bh / escala;
-      const xmin = origX - origW / 2, ymin = origY - origH / 2;
-
-      ctxPrev.strokeStyle = cor;
-      ctxPrev.lineWidth = Math.max(3, canvas.width * 0.006);
-      ctxPrev.strokeRect(xmin, ymin, origW, origH);
-
-      const rotulo = `${(NOMES_AMIGAVEIS[nomeClasse] || nomeClasse)}: ${Math.round(box.score * 100)}%`;
-      ctxPrev.font = `bold ${Math.max(16, canvas.width * 0.03)}px sans-serif`;
-      const largura = ctxPrev.measureText(rotulo).width;
-      ctxPrev.fillStyle = cor;
-      ctxPrev.fillRect(xmin - 2, Math.max(0, ymin - 30), largura + 10, 30);
-      ctxPrev.fillStyle = "#fff";
-      ctxPrev.fillText(rotulo, xmin + 3, Math.max(20, ymin - 8));
-    });
+    const { resultado, escala, padX, padY } = executarDeteccaoIA(canvas);
+    const canvasPreview = desenharCaixasDeteccao(canvas, resultado, escala, padX, padY);
 
     fotoTemporaria = canvasPreview.toDataURL('image/jpeg', 0.85);
     ultimaDeteccao = resultado;
@@ -627,15 +916,50 @@ function refazerTudo() {
   ['sel-filezitos','sel-tasty','sel-sheba','sel-sache'].forEach(id => document.getElementById(id).value = "");
   document.getElementById('btn-enviar').disabled = true;
   iniciarEtapa(0);
-  iniciarCamera();
+  iniciarCamera('video-camera');
 }
 
 function enviarDados() {
-  if (!fotoFinalCombinada) {
-    alert("Aguarde a imagem final terminar de ser montada e tente novamente.");
-    return;
+  if (fluxoAtual === "tudao") {
+    if (!fotoFinalCombinada) {
+      alert("Aguarde a imagem final terminar de ser montada e tente novamente.");
+      return;
+    }
+    enviarPayload({
+      tipoExposicao: "Tudão",
+      nomeDisplay: "",
+      temTudao: document.getElementById('sel-tudao').value,
+      temDreamies: itensEncontrados.dreamies ? "Sim" : "Não",
+      temBiscrok: itensEncontrados.biscrok ? "Sim" : "Não",
+      temFilezitos: document.getElementById('sel-filezitos').value,
+      temTastyBites: document.getElementById('sel-tasty').value,
+      temShebaCremoso: document.getElementById('sel-sheba').value,
+      temSacheCaramelo: document.getElementById('sel-sache').value,
+      image: fotoFinalCombinada   // 1 imagem única: Frente + Lateral Cão + Lateral Gato lado a lado
+    });
+  } else if (fluxoAtual === "outra") {
+    if (!fotoFinalOutraCombinada) {
+      alert("Aguarde a imagem final terminar de ser montada e tente novamente.");
+      return;
+    }
+    enviarPayload({
+      tipoExposicao: "Outra Exposição",
+      nomeDisplay: document.getElementById('input-nome-display').value.trim(),
+      temTudao: "Não",
+      temDreamies: itensEncontradosOutra.dreamies ? "Sim" : "Não",
+      temBiscrok: itensEncontradosOutra.biscrok ? "Sim" : "Não",
+      temFilezitos: document.getElementById('sel-o-filezitos').value,
+      temTastyBites: document.getElementById('sel-o-tasty').value,
+      temShebaCremoso: document.getElementById('sel-o-sheba').value,
+      temSacheCaramelo: document.getElementById('sel-o-sache').value,
+      image: fotoFinalOutraCombinada   // 1 imagem única: as fotos da exposição lado a lado
+    });
+  } else {
+    alert("Selecione o tipo de exposição da loja antes de enviar.");
   }
+}
 
+function enviarPayload(dadosExtras) {
   const btn = document.getElementById('btn-enviar');
   btn.innerText = "Enviando... Não feche a página!";
   btn.disabled = true;
@@ -644,24 +968,16 @@ function enviarDados() {
   const cnpjLoja = lojaCompleta.split("|")[0];
   const nomeLoja = lojaCompleta.split("|")[1];
 
-  const payload = {
+  const payload = Object.assign({
     supervisor: document.getElementById('sel-sup').value,
     promotor: document.getElementById('sel-prom').value,
     cnpj: cnpjLoja,
     loja: nomeLoja,
-    temTudao: document.getElementById('sel-tudao').value,
-    temDreamies: itensEncontrados.dreamies ? "Sim" : "Não",
-    temBiscrok: itensEncontrados.biscrok ? "Sim" : "Não",
-    temFilezitos: document.getElementById('sel-filezitos').value,
-    temTastyBites: document.getElementById('sel-tasty').value,
-    temShebaCremoso: document.getElementById('sel-sheba').value,
-    temSacheCaramelo: document.getElementById('sel-sache').value,
     lat: latFinal,
     lng: lngFinal,
     endereco: endFinal,
-    timestamp: timestampAtual,
-    image: fotoFinalCombinada   // 1 imagem única: Frente + Lateral Cão + Lateral Gato lado a lado
-  };
+    timestamp: timestampAtual
+  }, dadosExtras);
 
   fetch(APPS_SCRIPT_URL, {
     method: "POST",
