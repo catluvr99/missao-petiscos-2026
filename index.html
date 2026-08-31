@@ -244,6 +244,20 @@ async function carregarModeloIA() {
 
     modelYOLO = await tf.loadGraphModel(urlAbsolutaModelo);
 
+    // "Aquece" o modelo com uma predição em branco agora, enquanto ainda mostra a
+    // tela de carregamento. Da primeira vez que o modelo roda, o navegador compila
+    // os shaders da GPU (WebGL) — isso é o que travava a tela na primeira foto do
+    // promotor. Fazendo essa predição de aquecimento aqui, o travamento acontece
+    // aqui (escondido) em vez de na hora que o promotor tira a foto de verdade.
+    document.getElementById('ia-loading').innerText = "🧠 Preparando a Inteligência Artificial...";
+    tf.tidy(() => {
+      const entradaEmBranco = tf.zeros([1, 640, 640, 3]);
+      let saida = modelYOLO.predict(entradaEmBranco);
+      if (Array.isArray(saida)) saida = saida[0];
+      else if (saida && !saida.shape) saida = Object.values(saida)[0];
+      saida.dataSync(); // força a execução completa (e a compilação dos shaders) agora
+    });
+
     document.getElementById('ia-loading').style.backgroundColor = "#d4edda";
     document.getElementById('ia-loading').style.color = "#155724";
     document.getElementById('ia-loading').innerText = "✅ Inteligência Artificial Ativa e Pronta!";
