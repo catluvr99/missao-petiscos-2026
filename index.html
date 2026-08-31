@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Auditoria Tudão —  Ponto Extra</title>
+<title>Campanha C&T 2026</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.19.0/dist/tf.min.js"></script>
 
@@ -51,7 +51,7 @@ select, input{width:100%;padding:11px;border:1.5px solid var(--bd);border-radius
 
 <header>
   <div style="font-size:22px">📸</div>
-  <div><h1>Auditoria Ponto Extra</h1><p>Registro de "Tudão"</p></div>
+  <div><h1>Campanha C&T 2026</h1><p>Registro de "Tudão"</p></div>
 </header>
 
 <div class="wrap">
@@ -83,8 +83,19 @@ select, input{width:100%;padding:11px;border:1.5px solid var(--bd);border-radius
     </select>
 
     <div id="area-outra-exposicao" class="oculto">
-      <label class="lbl">Qual o display?</label>
-      <input type="text" id="input-nome-display" placeholder="Ex: Ilha Whiskas, Ponta de gôndola Pedigree..." oninput="checarPerguntasExtrasOutra()">
+      <label class="lbl">Qual o tipo de exposição?</label>
+      <select id="input-nome-display" onchange="checarPerguntasExtrasOutra()">
+        <option value="">— Selecione —</option>
+        <option value="Ponta de gôndola">Ponta de gôndola (com petiscos)</option>
+        <option value="Ilha">Ilha (com adicional de petiscos)</option>
+        <option value="Sobrecito">Sobrecito</option>
+        <option value="4way">4way</option>
+        <option value="Backlight">Backlight</option>
+        <option value="Checkout">Checkout</option>
+        <option value="Sidekick">Sidekick</option>
+        <option value="Guerrilha">Guerrilha</option>
+        <option value="Gravitacional">Gravitacional</option>
+      </select>
 
       <label class="lbl">Fotos da exposição</label>
       <div class="camera-container" id="camera-box-outra">
@@ -546,7 +557,7 @@ async function finalizarFotosOutra() {
 
   const resumo = `✅ ${fotosOutraLimpasBase64.length} foto(s) confirmada(s).\n` +
     `Biscrok: ${itensEncontradosOutra.biscrok ? "Sim ✅" : "Não"}  |  Dreamies: ${itensEncontradosOutra.dreamies ? "Sim ✅" : "Não"}\n` +
-    `Preencha o nome do display e responda os demais itens abaixo:`;
+    `Selecione o tipo de exposição e responda os demais itens abaixo:`;
   document.getElementById('status-info-outra').innerText = resumo;
   document.getElementById('perguntas-extra-outra').classList.remove('oculto');
   checarPerguntasExtrasOutra();
@@ -942,7 +953,7 @@ function enviarDados() {
     enviarPayload({
       tipoExposicao: "Outra Exposição",
       nomeDisplay: document.getElementById('input-nome-display').value.trim(),
-      temTudao: "Não",
+      temTudao: document.getElementById('input-nome-display').value.trim(), // ex: "Sobrecito" — não é Tudão, então registra qual é o ponto extra
       temDreamies: itensEncontradosOutra.dreamies ? "Sim" : "Não",
       temBiscrok: itensEncontradosOutra.biscrok ? "Sim" : "Não",
       temFilezitos: document.getElementById('sel-o-filezitos').value,
