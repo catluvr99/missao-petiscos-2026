@@ -475,8 +475,17 @@ async function capturarFotoOutra() {
     imgPreview.src = fotoOutraTemporaria;
 
     if (resultadoRelevante.length > 0) {
-      const nomes = resultadoRelevante
-        .map(b => `${NOMES_AMIGAVEIS[CLASSES[b.classId]]} (${Math.round(b.score * 100)}%)`)
+      // Uma linha por classe (Biscrok/Dreamies), mesmo que existam várias caixas da
+      // mesma classe na foto — evita repetir "Dreamies (73%) | Dreamies (71%)...".
+      const melhorPorClasse = {};
+      resultadoRelevante.forEach(b => {
+        const nome = CLASSES[b.classId];
+        if (!melhorPorClasse[nome] || b.score > melhorPorClasse[nome]) {
+          melhorPorClasse[nome] = b.score;
+        }
+      });
+      const nomes = Object.entries(melhorPorClasse)
+        .map(([nome, score]) => `${NOMES_AMIGAVEIS[nome]} (${Math.round(score * 100)}%)`)
         .join(' | ');
       document.getElementById('status-info-outra').innerText = `🎉 Identificado automaticamente: ${nomes}`;
       document.getElementById('status-info-outra').style.color = "#155724";
