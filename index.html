@@ -338,15 +338,33 @@ function configurarPerguntaTipoExposicao() {
   }
 }
 
-function habilitarContinuar() {
+async function habilitarContinuar() {
   const valorLoja = document.getElementById('sel-loja').value;
-  document.getElementById('btn-t1').disabled = !valorLoja;
+  const btnContinuar = document.getElementById('btn-t1');
+  btnContinuar.disabled = true;
   if (!valorLoja) return;
 
   const cnpjSel = valorLoja.split("|")[0];
   const itemRoteiro = ROTEIRO.find(item => item.j === cnpjSel);
   ehGrandeVarejo = ehLojaGrandeVarejo(itemRoteiro);
   configurarPerguntaTipoExposicao();
+
+  // Checa ANTES de liberar o formulário se essa loja já recebeu envio nesta semana
+  btnContinuar.disabled = true;
+  try {
+    const resp = await fetch(`${APPS_SCRIPT_URL}?cnpj=${encodeURIComponent(cnpjSel)}`);
+    const resultado = await resp.json();
+    if (resultado.bloqueado) {
+      alert(`Essa loja já recebeu um envio em ${resultado.dataEnvio} (nesta semana). Só é possível enviar novamente na próxima semana.`);
+      document.getElementById('sel-loja').value = "";
+      return; // botão continua desabilitado
+    }
+  } catch (err) {
+    console.error("Falha ao checar bloqueio semanal:", err);
+    // segue liberando o formulário mesmo se a checagem falhar (evita travar o promotor por erro de rede)
+  }
+
+  btnContinuar.disabled = false;
 }
 
 function irParaPasso2() {
