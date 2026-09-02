@@ -972,12 +972,11 @@ function atualizarAlertaValidacaoManualOutra(dreamiesDetectado, biscrokDetectado
   document.getElementById('alerta-validacao-manual-outra').classList.toggle('oculto', !mostrarBloco);
 }
 
-// Se o promotor marcou a caixinha de alerta, força o valor enviado para
-// "Sim (validação manual)" — mesmo que a IA não tenha detectado o item.
-function valorComAlertaManual(valorAtual, checkboxId) {
+// Retorna "Sim" se o promotor marcou a caixinha de validação manual, ou "" (em
+// branco) se não marcou — vai para as colunas "Validação - Tudão/Dreamies/Biscrok".
+function valorValidacaoManual(checkboxId) {
   const chk = document.getElementById(checkboxId);
-  if (chk && chk.checked) return "Sim (validação manual)";
-  return valorAtual;
+  return (chk && chk.checked) ? "Sim" : "";
 }
 
 // Só libera o envio quando as 4 perguntas extras forem respondidas
@@ -1045,9 +1044,12 @@ function enviarDados() {
     enviarPayload({
       tipoExposicao: "Tudão",
       nomeDisplay: "",
-      temTudao: valorComAlertaManual(document.getElementById('sel-tudao').value, 'chk-alerta-tudao'),
-      temDreamies: valorComAlertaManual(itensEncontrados.dreamies ? "Sim" : "Não", 'chk-alerta-dreamies'),
-      temBiscrok: valorComAlertaManual(itensEncontrados.biscrok ? "Sim" : "Não", 'chk-alerta-biscrok'),
+      temTudao: document.getElementById('sel-tudao').value,
+      temDreamies: itensEncontrados.dreamies ? "Sim" : "Não",
+      temBiscrok: itensEncontrados.biscrok ? "Sim" : "Não",
+      validacaoTudao: valorValidacaoManual('chk-alerta-tudao'),
+      validacaoDreamies: valorValidacaoManual('chk-alerta-dreamies'),
+      validacaoBiscrok: valorValidacaoManual('chk-alerta-biscrok'),
       temFilezitos: document.getElementById('sel-filezitos').value,
       temTastyBites: document.getElementById('sel-tasty').value,
       temShebaCremoso: document.getElementById('sel-sheba').value,
@@ -1063,8 +1065,11 @@ function enviarDados() {
       tipoExposicao: "Outra Exposição",
       nomeDisplay: document.getElementById('input-nome-display').value.trim(),
       temTudao: document.getElementById('input-nome-display').value.trim(), // ex: "Sobrecito" — não é Tudão, então registra qual é o ponto extra
-      temDreamies: valorComAlertaManual(itensEncontradosOutra.dreamies ? "Sim" : "Não", 'chk-alerta-o-dreamies'),
-      temBiscrok: valorComAlertaManual(itensEncontradosOutra.biscrok ? "Sim" : "Não", 'chk-alerta-o-biscrok'),
+      temDreamies: itensEncontradosOutra.dreamies ? "Sim" : "Não",
+      temBiscrok: itensEncontradosOutra.biscrok ? "Sim" : "Não",
+      validacaoTudao: "",
+      validacaoDreamies: valorValidacaoManual('chk-alerta-o-dreamies'),
+      validacaoBiscrok: valorValidacaoManual('chk-alerta-o-biscrok'),
       temFilezitos: document.getElementById('sel-o-filezitos').value,
       temTastyBites: document.getElementById('sel-o-tasty').value,
       temShebaCremoso: document.getElementById('sel-o-sheba').value,
