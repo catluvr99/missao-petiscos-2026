@@ -121,6 +121,16 @@ select, input{width:100%;padding:11px;border:1.5px solid var(--bd);border-radius
       </div>
 
       <div id="perguntas-extra-outra" class="oculto">
+        <div id="alerta-validacao-manual-outra" class="oculto" style="background:#FFF3CD;border:1px solid #FFECB5;border-radius:8px;padding:12px;margin-bottom:14px;">
+          <p style="margin:0 0 8px 0;font-weight:bold;color:#664D03;">⚠️ A IA não reconheceu os itens abaixo nas fotos. Se você tem certeza que estão presentes, marque para enviar para validação manual:</p>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;" id="linha-alerta-o-dreamies">
+            <input type="checkbox" id="chk-alerta-o-dreamies"> Dreamies está presente no display
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;" id="linha-alerta-o-biscrok">
+            <input type="checkbox" id="chk-alerta-o-biscrok"> Biscrok está presente no display
+          </label>
+        </div>
+
         <label class="lbl">Tem o petisco Filezitos no display?</label>
         <select id="sel-o-filezitos" onchange="checarPerguntasExtrasOutra()">
           <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
@@ -171,6 +181,19 @@ select, input{width:100%;padding:11px;border:1.5px solid var(--bd);border-radius
       <button class="btn btn-p oculto" id="btn-refazer-tudo" style="background:#4B5563;" onclick="refazerTudo()">🔄 Refazer as 3 fotos</button>
 
       <div id="perguntas-extra" class="oculto">
+        <div id="alerta-validacao-manual" class="oculto" style="background:#FFF3CD;border:1px solid #FFECB5;border-radius:8px;padding:12px;margin-bottom:14px;">
+          <p style="margin:0 0 8px 0;font-weight:bold;color:#664D03;">⚠️ A IA não reconheceu os itens abaixo nas fotos. Se você tem certeza que estão presentes, marque para enviar para validação manual:</p>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;" id="linha-alerta-tudao">
+            <input type="checkbox" id="chk-alerta-tudao"> Tudão está presente na loja
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;" id="linha-alerta-dreamies">
+            <input type="checkbox" id="chk-alerta-dreamies"> Dreamies está presente no display
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;" id="linha-alerta-biscrok">
+            <input type="checkbox" id="chk-alerta-biscrok"> Biscrok está presente no display
+          </label>
+        </div>
+
         <label class="lbl">Tem o petisco Filezitos no display?</label>
         <select id="sel-filezitos" onchange="checarPerguntasExtras()">
           <option value="">— Selecione —</option><option value="Sim">Sim</option><option value="Não">Não</option>
@@ -600,6 +623,7 @@ async function finalizarFotosOutra() {
     `Biscrok: ${itensEncontradosOutra.biscrok ? "Sim ✅" : "Não"}  |  Dreamies: ${itensEncontradosOutra.dreamies ? "Sim ✅" : "Não"}\n` +
     `Selecione o tipo de exposição e responda os demais itens abaixo:`;
   document.getElementById('status-info-outra').innerText = resumo;
+  atualizarAlertaValidacaoManualOutra(itensEncontradosOutra.dreamies, itensEncontradosOutra.biscrok);
   document.getElementById('perguntas-extra-outra').classList.remove('oculto');
   checarPerguntasExtrasOutra();
 }
@@ -907,9 +931,52 @@ async function confirmarFoto() {
     document.getElementById('status-info').innerText = resumo;
     document.getElementById('status-info').style.color = temTudao ? "#155724" : "#721c24";
 
+    atualizarAlertaValidacaoManual(temTudao, itensEncontrados.dreamies, itensEncontrados.biscrok);
     document.getElementById('perguntas-extra').classList.remove('oculto');
     checarPerguntasExtras();
   }
+}
+
+// Mostra/esconde as caixinhas de alerta "IA não reconheceu, mas está presente"
+// — só aparece a linha do item que NÃO foi detectado.
+function atualizarAlertaValidacaoManual(tudaoDetectado, dreamiesDetectado, biscrokDetectado) {
+  const linhaTudao = document.getElementById('linha-alerta-tudao');
+  const linhaDreamies = document.getElementById('linha-alerta-dreamies');
+  const linhaBiscrok = document.getElementById('linha-alerta-biscrok');
+
+  linhaTudao.style.display = tudaoDetectado ? 'none' : 'flex';
+  linhaDreamies.style.display = dreamiesDetectado ? 'none' : 'flex';
+  linhaBiscrok.style.display = biscrokDetectado ? 'none' : 'flex';
+
+  document.getElementById('chk-alerta-tudao').checked = false;
+  document.getElementById('chk-alerta-dreamies').checked = false;
+  document.getElementById('chk-alerta-biscrok').checked = false;
+
+  const mostrarBloco = !tudaoDetectado || !dreamiesDetectado || !biscrokDetectado;
+  document.getElementById('alerta-validacao-manual').classList.toggle('oculto', !mostrarBloco);
+}
+
+// Mesma lógica, versão do fluxo "Outra Exposição" (só Dreamies/Biscrok — não tem Tudão aqui)
+function atualizarAlertaValidacaoManualOutra(dreamiesDetectado, biscrokDetectado) {
+  const linhaDreamies = document.getElementById('linha-alerta-o-dreamies');
+  const linhaBiscrok = document.getElementById('linha-alerta-o-biscrok');
+
+  linhaDreamies.style.display = dreamiesDetectado ? 'none' : 'flex';
+  linhaBiscrok.style.display = biscrokDetectado ? 'none' : 'flex';
+
+  document.getElementById('chk-alerta-o-dreamies').checked = false;
+  document.getElementById('chk-alerta-o-biscrok').checked = false;
+
+  const mostrarBloco = !dreamiesDetectado || !biscrokDetectado;
+  document.getElementById('alerta-validacao-manual-outra').classList.toggle('oculto', !mostrarBloco);
+}
+
+// Se o promotor marcou a caixinha de alerta, força o valor enviado para
+// "Sim (validação manual)" — mesmo que a IA não tenha detectado o item.
+function valorComAlertaManual(valorAtual, checkboxId) {
+  const chk = document.getElementById(checkboxId);
+  if (chk && chk.checked) return "Sim (validação manual)";
+  return valorAtual;
 }
 
 // Só libera o envio quando as 4 perguntas extras forem respondidas
@@ -977,9 +1044,9 @@ function enviarDados() {
     enviarPayload({
       tipoExposicao: "Tudão",
       nomeDisplay: "",
-      temTudao: document.getElementById('sel-tudao').value,
-      temDreamies: itensEncontrados.dreamies ? "Sim" : "Não",
-      temBiscrok: itensEncontrados.biscrok ? "Sim" : "Não",
+      temTudao: valorComAlertaManual(document.getElementById('sel-tudao').value, 'chk-alerta-tudao'),
+      temDreamies: valorComAlertaManual(itensEncontrados.dreamies ? "Sim" : "Não", 'chk-alerta-dreamies'),
+      temBiscrok: valorComAlertaManual(itensEncontrados.biscrok ? "Sim" : "Não", 'chk-alerta-biscrok'),
       temFilezitos: document.getElementById('sel-filezitos').value,
       temTastyBites: document.getElementById('sel-tasty').value,
       temShebaCremoso: document.getElementById('sel-sheba').value,
@@ -995,8 +1062,8 @@ function enviarDados() {
       tipoExposicao: "Outra Exposição",
       nomeDisplay: document.getElementById('input-nome-display').value.trim(),
       temTudao: document.getElementById('input-nome-display').value.trim(), // ex: "Sobrecito" — não é Tudão, então registra qual é o ponto extra
-      temDreamies: itensEncontradosOutra.dreamies ? "Sim" : "Não",
-      temBiscrok: itensEncontradosOutra.biscrok ? "Sim" : "Não",
+      temDreamies: valorComAlertaManual(itensEncontradosOutra.dreamies ? "Sim" : "Não", 'chk-alerta-o-dreamies'),
+      temBiscrok: valorComAlertaManual(itensEncontradosOutra.biscrok ? "Sim" : "Não", 'chk-alerta-o-biscrok'),
       temFilezitos: document.getElementById('sel-o-filezitos').value,
       temTastyBites: document.getElementById('sel-o-tasty').value,
       temShebaCremoso: document.getElementById('sel-o-sheba').value,
